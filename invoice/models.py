@@ -206,7 +206,7 @@ class Invoice(models.Model):
         """Deduce unique filename for export."""
         return "{0}-{1}.{2}".format(
             self.state_text,
-            self.id,
+            self.uid,
             self.export.get_content_type().rsplit("/", 2)[1])
 
     def get_info(self):
