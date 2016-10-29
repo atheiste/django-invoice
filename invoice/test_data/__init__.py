@@ -6,7 +6,7 @@ from invoice.models import Invoice, InvoiceItem, Address, BankAccount
 
 def load():
     """Create testing data."""
-    contractor, created = Address.objects.get_or_create(
+    contractor, _ = Address.objects.get_or_create(
         name='Simon Luijk',
         street=u'Rydsvägen 242',
         town=u'Linköping',
@@ -19,7 +19,7 @@ def load():
                     'Email: boss@example.com')
         ))
 
-    subscriber, created = Address.objects.get_or_create(
+    subscriber, _ = Address.objects.get_or_create(
         name=u'Tomáš Peterka',
         street=u'Zdislavická',
         town=u'Praha',
@@ -29,7 +29,7 @@ def load():
             extra="Email: atheiste@seznam.cz"
         ))
 
-    account, created = BankAccount.objects.get_or_create(
+    account, _ = BankAccount.objects.get_or_create(
         number=782634210, bank=6250)
 
     basedir = os.path.dirname(os.path.abspath(__file__))
@@ -37,23 +37,26 @@ def load():
     if not os.path.exists(logo):
         logo = None
 
-    invoice, c = Invoice.objects.get_or_create(
+    invoice, _ = Invoice.objects.get_or_create(
         contractor=contractor,
         subscriber=subscriber,
         defaults=dict(logo=logo,
                       contractor_bank=account))
 
+    assert invoice.uid is not None, "UID is None!"
+    assert invoice.uid, "UID is \"{}\"".format(invoice.uid)
+
     InvoiceItem.objects.get_or_create(
-        invoice=invoice, description="Bunch of cow-horse meat", tax=22,
-        defaults={"quantity": 10, "unit_price": Decimal("550.00")})
+        invoice=invoice, description="Bunch of cow-horse meat",
+        defaults={"quantity": 10, "unit_price": Decimal("550.00"), "tax": 22})
     InvoiceItem.objects.get_or_create(
-        invoice=invoice, description="World peace", tax=10,
-        defaults={"quantity": 1, "unit_price": Decimal("999999.99")})
+        invoice=invoice, description="World peace",
+        defaults={"quantity": 1, "unit_price": Decimal("999999.99"), "tax": 10})
     InvoiceItem.objects.get_or_create(
-        invoice=invoice, description="IKEA flashlight", tax=10,
-        defaults={"quantity": 1, "unit_price": Decimal("4.50")})
+        invoice=invoice, description="IKEA flashlight",
+        defaults={"quantity": 1, "unit_price": Decimal("4.50"), "tax": 10})
     InvoiceItem.objects.get_or_create(
-        invoice=invoice, description="Sweet dream", tax=22,
-        defaults={"quantity": 2, "unit_price": Decimal("0.00")})
+        invoice=invoice, description="Sweet dream",
+        defaults={"quantity": 2, "unit_price": Decimal("0.00"), "tax": 22})
 
     return invoice

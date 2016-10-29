@@ -1,15 +1,16 @@
 # coding: utf-8
 from __future__ import absolute_import
+
 import datetime
 import os
 
-from django.test import TestCase
-from invoice.models import Invoice
+from django import test
+from invoice import models
 from invoice.exports import pdf
 from invoice import test_data
 
 
-class InvoiceTest(TestCase):
+class InvoiceTest(test.TestCase):
 
     def setUp(self):
         """Load test data first."""
@@ -17,10 +18,10 @@ class InvoiceTest(TestCase):
 
     def test_get_due(self):
         """Test due function with respect to paid/unpaid invoices."""
-        self.assertEqual(Invoice.objects.get_due().count(), 1)
+        self.assertEqual(models.Invoice.objects.get_due().count(), 1)
 
         self.invoice.set_paid()
-        self.assertEqual(Invoice.objects.get_due().count(), 0)
+        self.assertEqual(models.Invoice.objects.get_due().count(), 0)
 
     def test_get_due2(self):
         """Test due function with respect to date functions."""
@@ -30,11 +31,11 @@ class InvoiceTest(TestCase):
 
         self.invoice.date_issued = yesterday
         self.invoice.save()
-        self.assertEqual(Invoice.objects.get_due().count(), 1)
+        self.assertEqual(models.Invoice.objects.get_due().count(), 1)
 
         self.invoice.date_issued = tomorrow
         self.invoice.save()
-        self.assertEqual(Invoice.objects.get_due().count(), 0)
+        self.assertEqual(models.Invoice.objects.get_due().count(), 0)
 
     def test_default_export(self):
         """Test default (HTML) generation.
