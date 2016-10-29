@@ -1,27 +1,33 @@
 from setuptools import setup
 
-APP_NAME = "django-invoice2"
-VERSION = '0.1'
-
 setup(
-    name=APP_NAME,
-    version=VERSION,
+    name="django-invoice2",
+    version="0.1",
     description='Pluggable django invoicing app',
     packages=[
         'invoice',
-        'invoice.utils',
         'invoice.exports',
-        'invoice.test_data'
+        'invoice.migrations',
+        'invoice.templatetags',
+        'invoice.utils',
     ],
+    package_data={
+        "invoice": [
+            "static/invoice/*",
+            "templates/admin/invoice/invoice/*.html",
+            "templates/invoice/*.html",
+            "locale/*/LC_MESSAGES/*",
+        ]
+    },
     include_package_data=True,
 
     author='Tomas Peterka',
     author_email='prestizni@gmail.com',
-    license="GPL v3",
-    url='http://pypi.python.org/pypi/{0}/'.format(APP_NAME),
+    license="MIT",
     keywords="django invoice pdf",
-
+    url="https://github.com/katomaso/django-invoice",
     install_requires=[
         "django>=1.8",
+        "reportlab",
     ],
 )

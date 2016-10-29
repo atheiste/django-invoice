@@ -1,5 +1,0 @@
-include LICENCE
-recursive-include invoice/locale/* *.mo *.po
-recursive-include invoice/static *.ttf
-recursive-include invoice/test_data *.png
-recursive-include invoice/templates/admin/invoice/invoice *.html
