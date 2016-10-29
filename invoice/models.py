@@ -25,10 +25,15 @@ from invoice.utils import format_currency, load_class
 
 DEFAULT_ADDRESS_MODEL = 'invoice.Address'
 DEFAULT_BANKACCOUNT_MODEL = 'invoice.BankAccount'
+DEFAULT_UID_LENGTH = 6
 
 AddressModel = getattr(settings, 'INVOICE_ADDRESS_MODEL', DEFAULT_ADDRESS_MODEL)
 BankAccountModel = getattr(settings, 'INVOICE_BANK_ACCOUNT_MODEL', DEFAULT_BANKACCOUNT_MODEL)
 ExportClass = load_class(getattr(settings, 'INVOICE_EXPORT_CLASS', 'invoice.exports.html.HtmlExport'))
+
+
+assert getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH) <= 10, "Invoice UID has to be <= 10"
+assert getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH) >= 3, "Invoice UID has to be >= 3"
 
 
 @python_2_unicode_compatible
@@ -112,6 +117,12 @@ def in_14_days():
     return tz_aware.now().date() + timedelta(days=14)
 
 
+def random_hash(length):
+    """Generate random hash."""
+    return random.choice(string.digits[1:]) + \
+           "".join(random.sample(string.digits, length - 1))
+
+
 @python_2_unicode_compatible
 class Invoice(models.Model):
     """Base model for invoice which can be exported to different format."""
@@ -143,35 +154,39 @@ class Invoice(models.Model):
     objects = InvoiceManager()
     export = ExportClass()
 
-    def __str__(self):
-        return smart_text("{0} {1} {2}").format(self.state_text, _("nr."), self.id)
-
     class Meta:
         app_label = "invoice"
         verbose_name = lazy_('Invoice')
         verbose_name_plural = lazy_('Invoices')
         ordering = ('-date_issued', 'id')
 
+    def __str__(self):
+        return " ".join((smart_text(self.state_text), self.uid))
+
     def save(self, *args, **kwargs):
         """Generate random UID before saving."""
         if not self.uid:
-            self.uid = "".join(random.sample(string.ascii_letters + string.digits, 8))
-            while self.__class__.objects.filter(uid=self.uid).exists():
-                self.uid = "".join(random.sample(string.ascii_letters + string.digits, 8))
+            uid_len = getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH)
+            self.uid = random_hash(uid_len)
+            while Invoice.objects.filter(uid=self.uid).exists():
+                self.uid = random_hash(uid_len)
         return super(Invoice, self).save(*args, **kwargs)
 
     @property
     def state_text(self):
+        """Return suitable text of Proforma/Invoice."""
         for state in self.INVOICE_STATES:
             if state[0] == self.state:
                 return state[1]
 
     def set_paid(self):
+        """Set paid to today."""
         self.date_paid = tz_aware.now().date()
         self.state = self.STATE_INVOICE
         self.save()
 
     def add_item(self, description, price, tax, quantity=1):
+        """Shortcut for item addition."""
         if description is not None and price is not None:
             InvoiceItem.objects.create(invoice=self, description=description,
                                        unit_price=price, tax=tax,
