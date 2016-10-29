@@ -14,7 +14,7 @@ class InvoiceAdmin(admin.ModelAdmin):
         'id',
         'state',
         'total_amount',
-        'date_issuance',
+        'date_issued',
         'date_paid',
     )
 

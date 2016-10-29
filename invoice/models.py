@@ -15,7 +15,7 @@ from django.forms.models import model_to_dict
 from django.http.response import HttpResponse
 from django.utils.encoding import python_2_unicode_compatible, smart_text
 from django.utils.functional import cached_property
-from django.utils.timezone import now
+from django.utils import timezone as tz_aware
 from django.utils.translation import (
     ugettext_lazy as lazy_,
     ugettext as _
@@ -28,13 +28,12 @@ DEFAULT_BANKACCOUNT_MODEL = 'invoice.BankAccount'
 
 AddressModel = getattr(settings, 'INVOICE_ADDRESS_MODEL', DEFAULT_ADDRESS_MODEL)
 BankAccountModel = getattr(settings, 'INVOICE_BANK_ACCOUNT_MODEL', DEFAULT_BANKACCOUNT_MODEL)
-ExportClass = load_class(getattr(settings, 'INVOICE_EXPORT_CLASS', 'invoice.exports.HtmlExport'))
+ExportClass = load_class(getattr(settings, 'INVOICE_EXPORT_CLASS', 'invoice.exports.html.HtmlExport'))
 
 
 @python_2_unicode_compatible
 class Address(models.Model):
     """Address to be printed to Invoice - the method `as_text` is mandatory."""
-
     name = models.CharField(max_length=60)
     street = models.CharField(max_length=60)
     town = models.CharField(max_length=60)
@@ -48,12 +47,14 @@ class Address(models.Model):
 
     class Meta:
         app_label = "invoice"
+        verbose_name = lazy_("Address")
         verbose_name_plural = lazy_("Addresses")
 
     def __str__(self):
         return u"{0}, {1}".format(self.name, self.street)
 
     def as_text(self):
+        """Rich text formating mostly for debugging."""
         self_dict = model_to_dict(self)
         base = (u"{name}\n"
                 u"{street}\n"
@@ -72,7 +73,7 @@ class Address(models.Model):
 
 @python_2_unicode_compatible
 class BankAccount(models.Model):
-    """Bank account. Mandatory for SHOP"""
+    """Bank account is mandatory for shop."""
     prefix = models.DecimalField(_('Prefix'), null=True, blank=True,
                                  max_digits=15, decimal_places=0)
     number = models.DecimalField(_('Account number'), decimal_places=0,
@@ -80,8 +81,9 @@ class BankAccount(models.Model):
     bank = models.DecimalField(_('Bank code'), decimal_places=0, max_digits=4)
 
     class Meta:
-        app_label = lazy_("invoice")
-        verbose_name = lazy_("bank account")
+        app_label = "invoice"
+        verbose_name = lazy_("Bank account")
+        verbose_name_plural = lazy_("Bank accounts")
 
     def __str__(self):
         if not self.prefix:
@@ -89,25 +91,30 @@ class BankAccount(models.Model):
         return u"{0} - {1} / {2}".format(self.prefix, self.number, self.bank)
 
     def as_text(self):
+        """Rich text formatting mostly for debug."""
         return u"{0}: {1}".format(_("Bank account"), smart_text(self))
 
 
-
 class InvoiceManager(models.Manager):
+    """Manager with hard-coded usual deadlines."""
 
-    def get_due(self):
-        return (self.get_query_set()
-                    .filter(date_issuance__lte=now().date())
+    def due(self):
+        """Get unpaid invoices which should have been paid."""
+        return (self.get_queryset()
+                    .filter(date_issued__lte=tz_aware.now().date())
                     .filter(date_paid__isnull=True)
                 )
+    get_due = due
 
 
 def in_14_days():
-    return now().date() + timedelta(days=14)
+    """Timezone aware 14 days shift from today."""
+    return tz_aware.now().date() + timedelta(days=14)
 
 
 @python_2_unicode_compatible
 class Invoice(models.Model):
+    """Base model for invoice which can be exported to different format."""
     STATE_PROFORMA = 'proforma'
     STATE_INVOICE = 'invoice'
     INVOICE_STATES = (
@@ -126,7 +133,7 @@ class Invoice(models.Model):
     logo = models.FilePathField(match=".*(png|jpg|jpeg|svg)", null=True, blank=True)
     state = models.CharField(max_length=15, choices=INVOICE_STATES, default=STATE_PROFORMA)
 
-    date_issuance = models.DateField(auto_now_add=True)
+    date_issued = models.DateField(auto_now_add=True)
     date_due = models.DateField(default=in_14_days)
     date_paid = models.DateField(blank=True, null=True)
 
@@ -141,10 +148,12 @@ class Invoice(models.Model):
 
     class Meta:
         app_label = "invoice"
-        verbose_name = lazy_('invoice')
-        ordering = ('-date_issuance', 'id')
+        verbose_name = lazy_('Invoice')
+        verbose_name_plural = lazy_('Invoices')
+        ordering = ('-date_issued', 'id')
 
     def save(self, *args, **kwargs):
+        """Generate random UID before saving."""
         if not self.uid:
             self.uid = "".join(random.sample(string.ascii_letters + string.digits, 8))
             while self.__class__.objects.filter(uid=self.uid).exists():
@@ -158,14 +167,15 @@ class Invoice(models.Model):
                 return state[1]
 
     def set_paid(self):
-        self.date_paid = now().date()
+        self.date_paid = tz_aware.now().date()
         self.state = self.STATE_INVOICE
         self.save()
 
-    def add_item(self, description, price, quantity=1):
+    def add_item(self, description, price, tax, quantity=1):
         if description is not None and price is not None:
             InvoiceItem.objects.create(invoice=self, description=description,
-                                       unit_price=price, quantity=quantity)
+                                       unit_price=price, tax=tax,
+                                       quantity=quantity)
 
     def total_amount(self):
         """Return total as formated string."""
@@ -174,10 +184,7 @@ class Invoice(models.Model):
     @cached_property
     def total(self):
         """Compute total price using all items as decimal number."""
-        x = Decimal('0.00')
-        for item in self.items.all():
-            x = x + item.total
-        return x
+        return sum(item.total for item in self.items.all())
 
     @property
     def filename(self):
@@ -223,20 +230,25 @@ class Invoice(models.Model):
 
 @python_2_unicode_compatible
 class InvoiceItem(models.Model):
+    """Item recoded on Invoice."""
     invoice = models.ForeignKey('Invoice', related_name='items', unique=False)
     description = models.CharField(max_length=100)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+    quantity = models.DecimalField(max_digits=4, decimal_places=0, default=1)
+    tax = models.DecimalField(max_digits=3, decimal_places=0, blank=False, null=False)
 
     class Meta:
         app_label = "invoice"
-        verbose_name = lazy_("invoice item")
+        verbose_name = lazy_("Invoice item")
+        verbose_name_plural = lazy_("Invoice items")
         ordering = ['unit_price']
 
     @property
     def total(self):
-        total = Decimal(str(self.unit_price * self.quantity))
-        return total.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+        """Total price for all units including tax."""
+        total = self.unit_price * self.quantity * (1 + self.tax / 100)
+        return Decimal("{:.3f}".format(total)).quantize(Decimal('0.01'),
+                                                        rounding=ROUND_HALF_UP)
 
     def __str__(self):
         return self.description
