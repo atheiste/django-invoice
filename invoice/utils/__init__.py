@@ -1,24 +1,42 @@
+# coding: utf-8
+import locale
+import logging
+
 from django.db import models
 from django.core import exceptions
+from django.conf import settings
 from importlib import import_module
-from django.utils.translation import ugettext as _
 
 
-def format_currency(amount):
-    return _("{0} $").format(amount)
+def format_currency(amount, symbol=True):
+    """Format `amount` as a string with current locale settings."""
+    try:
+        return locale.currency(amount, symbol, grouping=True)
+    except ValueError as error:
+        # if no locale is set use settings.LANG or default locale for monetary strings
+        logging.getLogger("invoice").warn(error)
+        locale_str = getattr(settings, "LANG", ".".join(locale.getlocale()))
+        if not hasattr(settings, "LANG"):
+            logging.getLogger("invoice").warn(
+                "Using default locale {}! Alter with settings.LANG.".format(locale_str))
+        locale.setlocale(locale.LC_ALL, locale_str)
+    return locale.currency(amount, symbol, grouping=True)
 
 
 def format_date(date):
-    return date.strftime(_("%m-%d-%Y"))
+    """Format date as a string with respect to current locale."""
+    if "%" not in settings.SHORT_DATE_FORMAT:
+        actual_date_format = "".join("%" + c if c.isalpha() else c
+                                     for c in settings.SHORT_DATE_FORMAT)
+        return date.strftime(actual_date_format)
+    return date.strftime(settings.SHORT_DATE_FORMAT)
 
 
 def load_class(class_path, setting_name=None):
-    """
-    Loads a class given a class_path. The setting value may be a string or a
-    tuple.
+    """Load a class given a class_path.
 
-    The setting_name parameter is only there for pretty error output, and
-    therefore is optional
+    The setting value may be a string or a tuple. The setting_name parameter is
+    only there for pretty error output, and therefore is optional
     """
     try:
         class_module, class_name = class_path.rsplit('.', 1)
@@ -54,6 +72,7 @@ def load_class(class_path, setting_name=None):
 
 
 def model_to_dict(instance, exclude=()):
+    """Transform model class into dictionary where keys are field names."""
     data = {}
     for f in instance._meta.fields:
         if exclude and f.name in exclude:

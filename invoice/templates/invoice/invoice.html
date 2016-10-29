@@ -1,20 +1,109 @@
-{% load i18n %}
+{% load i18n invoice %}
 <!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <title>{{ invoice }}</title>
-        <meta name="description" content="" />
-        <meta name="author" content="{{invoice.contractor.name|default:'django-invoice'}}" />
-    </head>
 
-    <body>
-        <h1>{{ invoice }}</h1>
-        <table width="190mm"> {# A4: 210x290mm #}
+
+{% block head %}
+<head>
+    <meta charset="utf-8" />
+    <title>{{ invoice }}</title>
+    <meta name="description" content="" />
+    <meta name="author" content="{{invoice.contractor.name|default:'django-invoice'}}" />
+{% block css %}
+    <style type="text/css" media="screen">
+        body {
+            /* body is A4 size 210x290mm */
+            width: 190mm;
+            height: 270mm;
+            padding: 10mm;
+            font-size: 13pt;
+            font-family: FreeSans;
+        }
+        table {width:100%;}
+    </style>
+{% endblock css %}
+</head>
+{% endblock head %}
+
+
+{% block body %}
+<body>
+    <h1>{{ invoice }}</h1>
+
+    <br>
+
+    <table>
+        <thead>
             <tr>
-                <td width="80mm">{{invoice.contractor.as_text|linebreaksbr}}</td>
-                <td width="80mm">{{invoice.subscriber.as_text|linebreaksbr}}</td>
+                <th>{% trans "Seller" %}</th>
+                <th>{% trans "Billing to" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{invoice.contractor.as_text|linebreaksbr}}</td>
+                <td>{{invoice.subscriber.as_text|linebreaksbr}}</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <br>
+
+    <table>
+        <tr>
+        <td>
+        <table>
+            <tr>
+                <td>{% trans "Date issued" %}: </td>
+                <td>{{ invoice.date_issued|date:"SHORT_DATE_FORMAT"}}</td>
+            </tr>
+            <tr>
+                <td>{% trans "Date due" %}: </td>
+                <td>{{ invoice.date_due|date:"SHORT_DATE_FORMAT"}}</td>
             </tr>
         </table>
-    </body>
+        </td>
+
+        <td>
+        <table>
+            <tr>
+                <td>{% trans "Bank account" %}: </td>
+                <td>{{ invoice.contractor_bank }}</td>
+            </tr>
+            <tr>
+                <td>{% trans "Variable symbol" %}: </td>
+                <td>{{ invoice.id }}</td>
+            </tr>
+        </table>
+        </td>
+        </tr>
+    </table>
+    <br>
+
+    <table cellspacing="10px">
+        <thead>
+            <tr>
+                <th>{% trans "Description" %}</th>
+                <th>{% trans "Qty" %}</th>
+                <th>{% trans "Unit price" %}</th>
+                <th>{% trans "Tax" %}</th>
+                <th>{% trans "Total" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for item in invoice.items.all %}
+            <tr>
+                <td>{{ item.description }}</td>
+                <td align="right">{{ item.quantity }}</td>
+                <td align="right">{{ item.unit_price|as_currency }}</td>
+                <td align="right">{{ item.tax }}%</td>
+                <td align="right">{{ item.total|as_currency }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</body>
+{% endblock body %}
+
 </html>
