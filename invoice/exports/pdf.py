@@ -89,7 +89,7 @@ class PdfExport(Export):
         canvas.setFillColorRGB(0.2, 0.2, 0.2)
         canvas.setFont(self.FONT_NAME, 16)
         canvas.drawString(2 * cm, self.baseline,
-                          smart_text(invoice.state_text))
+                          smart_text(invoice))
         canvas.drawString((21 - 6) * cm, self.baseline,
                           format_date(invoice.date_issued))
         canvas.setLineWidth(3)
@@ -135,6 +135,7 @@ class PdfExport(Export):
 
     def draw_info(self, invoice, canvas):
         """Draw legal info between contacts table and actual items."""
+        from django.conf import settings
         canvas.setStrokeColorRGB(0.9, 0.9, 0.9)
         canvas.setLineWidth(0.5)
         canvas.line(1.5 * cm, self.baseline, (21 - 1.5) * cm, self.baseline)
@@ -149,10 +150,9 @@ class PdfExport(Export):
 
         try:
             textobject = canvas.beginText(11.5 * cm, self.baseline)
-            textobject.textLine(_("Bank account: ") +
-                                str(invoice.contractor_bank))
-            textobject.textLine(u"{0}: {1}".format(
-                _('Variable symbol'), invoice.id))
+            textobject.textLine(_("Bank account: ") + str(invoice.contractor_bank))
+            if getattr(settings, "LANGUAGE_CODE", "en_US") in ("cs", "cz", "cs_CZ", "cs_SK", "sk"):
+                textobject.textLine(u"{0}: {1}".format(_('Variable symbol'), invoice.uid))
             canvas.drawText(textobject)
         except:
             logger.warn("Contractor {} has no bank account".format(
