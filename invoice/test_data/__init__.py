@@ -21,12 +21,12 @@ def load():
 
     subscriber, _ = Address.objects.get_or_create(
         name=u'Tomáš Peterka',
-        street=u'Zdislavická',
-        town=u'Praha',
+        street=u'Neřeknu 243',
+        town=u'Praha 1',
         defaults=dict(
-            postcode='142 00',
+            postcode='110 00',
             country=u"Czech Republic",
-            extra="Email: atheiste@seznam.cz"
+            extra="Email: prestizni@gmail.com"
         ))
 
     account, _ = BankAccount.objects.get_or_create(
