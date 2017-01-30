@@ -1,15 +1,16 @@
 from setuptools import setup
 
+import invoice
+
 setup(
     name="django-invoice2",
-    version="0.1.1",
+    version=invoice.version,
     description='Pluggable django invoicing app',
     packages=[
         'invoice',
         'invoice.exports',
         'invoice.migrations',
         'invoice.templatetags',
-        'invoice.utils',
     ],
     package_data={
         "invoice": [

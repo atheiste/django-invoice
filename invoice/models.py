@@ -1,11 +1,8 @@
 # coding: utf-8
 from __future__ import division
+import io
 import os
-import random
-import string
 
-from io import FileIO, BytesIO
-from datetime import timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from email.mime.application import MIMEApplication
 
@@ -16,24 +13,13 @@ from django.http.response import HttpResponse
 from django.utils.encoding import python_2_unicode_compatible, smart_text
 from django.utils.functional import cached_property
 from django.utils import timezone as tz_aware
-from django.utils.translation import (
-    ugettext_lazy as lazy_,
-    ugettext as _
-)
+from django.utils.translation import ugettext as _
+from django.utils.translation import ugettext_lazy as lazy_
 
-from invoice.utils import format_currency, load_class
+from . import utils
+from . import app_settings
 
-DEFAULT_ADDRESS_MODEL = 'invoice.Address'
-DEFAULT_BANKACCOUNT_MODEL = 'invoice.BankAccount'
-DEFAULT_UID_LENGTH = 6
-
-AddressModel = getattr(settings, 'INVOICE_ADDRESS_MODEL', DEFAULT_ADDRESS_MODEL)
-BankAccountModel = getattr(settings, 'INVOICE_BANK_ACCOUNT_MODEL', DEFAULT_BANKACCOUNT_MODEL)
-ExportClass = load_class(getattr(settings, 'INVOICE_EXPORT_CLASS', 'invoice.exports.html.HtmlExport'))
-
-
-assert getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH) <= 10, "Invoice UID has to be <= 10"
-assert getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH) >= 3, "Invoice UID has to be >= 3"
+ExportManager = utils.load_class(app_settings.EXPORT)
 
 
 @python_2_unicode_compatible
@@ -51,6 +37,7 @@ class Address(models.Model):
     extra = models.TextField(null=True, blank=True)
 
     class Meta:
+        """State explicitely app_label."""
         app_label = "invoice"
         verbose_name = lazy_("Address")
         verbose_name_plural = lazy_("Addresses")
@@ -86,6 +73,7 @@ class BankAccount(models.Model):
     bank = models.DecimalField(_('Bank code'), decimal_places=0, max_digits=4)
 
     class Meta:
+        """State explicitely app_label."""
         app_label = "invoice"
         verbose_name = lazy_("Bank account")
         verbose_name_plural = lazy_("Bank accounts")
@@ -112,17 +100,6 @@ class InvoiceManager(models.Manager):
     get_due = due
 
 
-def in_14_days():
-    """Timezone aware 14 days shift from today."""
-    return tz_aware.now().date() + timedelta(days=14)
-
-
-def random_hash(length):
-    """Generate random hash."""
-    return random.choice(string.digits[1:]) + \
-           "".join(random.sample(string.digits, length - 1))
-
-
 @python_2_unicode_compatible
 class Invoice(models.Model):
     """Base model for invoice which can be exported to different format."""
@@ -134,27 +111,32 @@ class Invoice(models.Model):
     )
 
     uid = models.CharField(unique=True, max_length=10, blank=True)
-    contractor = models.ForeignKey(AddressModel, related_name='+')
-    contractor_bank = models.ForeignKey(BankAccountModel, related_name='+', db_index=False,
-                                        null=True, blank=True)
+    contractor = models.ForeignKey(
+        app_settings.ADDRESS_MODEL, swappable=True, related_name='+')
+    contractor_bank = models.ForeignKey(
+        app_settings.BANK_ACCOUNT_MODEL, swappable=True, related_name='+',
+        db_index=False, null=True, blank=True)
 
-    subscriber = models.ForeignKey(AddressModel, related_name='+')
-    subscriber_shipping = models.ForeignKey(AddressModel, related_name='+', db_index=False,
-                                            null=True, blank=True)
+    subscriber = models.ForeignKey(
+        app_settings.ADDRESS_MODEL, swappable=True, related_name='+')
+    subscriber_shipping = models.ForeignKey(
+        app_settings.ADDRESS_MODEL, swappable=True, related_name='+',
+        db_index=False, null=True, blank=True)
     logo = models.FilePathField(match=".*(png|jpg|jpeg|svg)", null=True, blank=True)
     state = models.CharField(max_length=15, choices=INVOICE_STATES, default=STATE_PROFORMA)
 
     date_issued = models.DateField(auto_now_add=True)
-    date_due = models.DateField(default=in_14_days)
+    date_due = models.DateField(default=utils.in_14_days)
     date_paid = models.DateField(blank=True, null=True)
 
     created = models.DateTimeField(auto_now_add=True, verbose_name=_('Date added'))
     modified = models.DateTimeField(auto_now=True, verbose_name=_('Last modified'))
 
     objects = InvoiceManager()
-    export = ExportClass()
+    export = ExportManager()
 
     class Meta:
+        """State explicitely app_label and default ordering."""
         app_label = "invoice"
         verbose_name = lazy_('Invoice')
         verbose_name_plural = lazy_('Invoices')
@@ -166,10 +148,9 @@ class Invoice(models.Model):
     def save(self, *args, **kwargs):
         """Generate random UID before saving."""
         if not self.uid:
-            uid_len = getattr(settings, 'INVOICE_UID_LENGTH', DEFAULT_UID_LENGTH)
-            self.uid = random_hash(uid_len)
+            self.uid = utils.random_hash(app_settings.UID_LENGTH)
             while Invoice.objects.filter(uid=self.uid).exists():
-                self.uid = random_hash(uid_len)
+                self.uid = utils.random_hash(app_settings.UID_LENGTH)
         return super(Invoice, self).save(*args, **kwargs)
 
     @property
@@ -194,7 +175,7 @@ class Invoice(models.Model):
 
     def total_amount(self):
         """Return total as formated string."""
-        return format_currency(self.total)
+        return utils.format_currency(self.total)
 
     @cached_property
     def total(self):
@@ -217,30 +198,38 @@ class Invoice(models.Model):
         """Return (multiline) string with info in footer."""
         return None
 
-    def export_file(self, basedir):
+    def as_file(self, basedir):
+        """Export invoice into a file to `basedir`."""
         filename = os.path.join(basedir, self.filename)
-        fileio = FileIO(filename, "w")
+        fileio = io.FileIO(filename, "w")
         self.export.draw(self, fileio)
         fileio.close()
         return filename
+    export_file = as_file  # backward compatibility
 
-    def export_bytes(self):
-        stream = BytesIO()
+    def as_bytes(self):
+        """Export invoice into byte array."""
+        stream = io.BytesIO()
         self.export.draw(self, stream)
         output = stream.getvalue()
         stream.close()
         return output
+    export_bytes = as_bytes  # backward compatibility
 
-    def export_attachment(self):
-        attachment = MIMEApplication(self.export_bytes())
+    def as_attachment(self):
+        """Export invoice into email attachment."""
+        attachment = MIMEApplication(self.as_bytes())
         attachment.add_header("Content-Disposition", "attachment", filename=self.filename)
         return attachment
+    export_attachment = as_attachment  # backward compatibility
 
-    def export_response(self):
+    def as_response(self):
+        """Export invoice into downloadable HTTP reponse."""
         response = HttpResponse(content_type=self.export.get_content_type())
         response['Content-Disposition'] = 'attachment; filename="{0}"'.format(self.filename)
-        response.write(self.export_bytes())
+        response.write(self.as_bytes())
         return response
+    export_response = as_response  # backward compatibility
 
 
 @python_2_unicode_compatible

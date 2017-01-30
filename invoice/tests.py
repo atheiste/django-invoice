@@ -45,7 +45,7 @@ class InvoiceTest(test.TestCase):
         basedir = "/tmp"
         if self.invoice.logo:
             self.assertTrue(os.path.exists(self.invoice.logo))
-        filename = self.invoice.export_file(basedir)
+        filename = self.invoice.as_file(basedir)
         self.assertTrue(os.path.exists(filename))
         stats = os.stat(filename)
         self.assertTrue(stats.st_size > 10)  # the file has to contain something
@@ -60,7 +60,7 @@ class InvoiceTest(test.TestCase):
         if self.invoice.logo:
             self.assertTrue(os.path.exists(self.invoice.logo))
         self.invoice.export = pdf.PdfExport()
-        filename = self.invoice.export_file(basedir)
+        filename = self.invoice.as_file(basedir)
         self.assertTrue(os.path.exists(filename))
         stats = os.stat(filename)
         self.assertTrue(stats.st_size > 10)  # the file has to contain something

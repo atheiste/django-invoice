@@ -1,11 +1,26 @@
 # coding: utf-8
 import locale
 import logging
+import string
+import random
 
+from datetime import timedelta
 from django.db import models
 from django.core import exceptions
 from django.conf import settings
+from django.utils import timezone as tz_aware
 from importlib import import_module
+
+
+def in_14_days():
+    """Timezone aware 14 days shift from today."""
+    return tz_aware.now().date() + timedelta(days=14)
+
+
+def random_hash(length):
+    """Generate random hash."""
+    return random.choice(string.digits[1:]) + \
+           "".join(random.sample(string.digits, length - 1))
 
 
 def format_currency(amount, symbol=True):
