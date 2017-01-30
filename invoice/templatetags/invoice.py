@@ -1,7 +1,8 @@
 # coding: utf-8
+from __future__ import absolute_import
 
 from django.template import Library
-from .. import utils
+from invoice import utils
 
 register = Library()
 
