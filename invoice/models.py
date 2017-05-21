@@ -167,7 +167,13 @@ class Invoice(models.Model):
         self.save()
 
     def add_item(self, description, price, tax, quantity=1):
-        """Shortcut for item addition."""
+        """Shortcut for item addition.
+
+        :param str description: Line description
+        :param number price: Unit price without VAT
+        :param number tax: Tax in percents (e.g. 21)
+        :param int quantity: Quantity of units
+        """
         if description is not None and price is not None:
             InvoiceItem.objects.create(invoice=self, description=description,
                                        unit_price=price, tax=tax,
