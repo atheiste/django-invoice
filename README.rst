@@ -5,6 +5,17 @@ Django Invoice
 
 General purpose invoicing app.
 
+Quickstart
+----------
+
+    # settings.py
+    INVOICE_BANK_ACCOUNT_MODEL = 'myapp.MyBankModel'  # optional
+    INVOICE_ADDRESS_MODEL = 'myapp.MyAddressModel'  # optional
+    # address model should have `as_text` method returning multi-line string
+    INVOICE_EXPORT = "pdf"  # or default "html" or your own "fully.dotted.to.Class"
+
+    #
+
 This app provides simple (but sufficient) Invoice model with export abilities.
 The default export is into PDF but it's easy to write and use your own. The app is
 python 3 compatible, has full unicode fonts and ability to use company logo.
